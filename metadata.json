@@ -1,0 +1,5 @@
+{
+  "name": "RBF Kernel Explorer",
+  "description": "An interactive educational tool to visualize how the Radial Basis Function (RBF) Kernel projects data into higher dimensions to solve non-linear classification problems.",
+  "requestFramePermissions": []
+}
