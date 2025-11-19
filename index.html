@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>RBF Kernel Explorer</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css">
     <script>
       tailwind.config = {
         theme: {
@@ -23,15 +24,225 @@
   <script type="importmap">
 {
   "imports": {
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/"
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-950 text-slate-100 antialiased">
-    <div id="root"></div>
+  <body class="bg-slate-950 text-slate-100 antialiased min-h-screen flex flex-col font-sans">
+    
+    <!-- Main Layout -->
+    <div class="max-w-[1600px] mx-auto w-full p-4 md:p-8 pb-4">
+        
+        <!-- Header -->
+        <header class="mb-8 md:mb-12 text-center md:text-left border-b border-slate-800 pb-6">
+            <h1 class="text-3xl md:text-5xl font-extrabold bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-blue-500 to-indigo-500 mb-4">
+                RBF Kernel Explorer
+            </h1>
+            <p class="text-slate-400 max-w-3xl text-lg leading-relaxed">
+                An interactive laboratory to understand how Support Vector Machines use the 
+                <span class="text-cyan-400 font-mono mx-1">Radial Basis Function</span> 
+                to lift non-linear data into higher dimensions.
+            </p>
+        </header>
+
+        <!-- Content Grid -->
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8">
+            
+            <!-- Left Column: Controls -->
+            <div class="xl:col-span-3 space-y-6">
+                
+                <!-- Control Panel -->
+                <div class="bg-slate-800 p-4 rounded-lg border border-slate-700 space-y-6">
+                    <div>
+                        <label class="block text-sm font-medium text-slate-300 mb-2 flex justify-between">
+                            <span>Gamma (γ)</span>
+                            <span id="gamma-val" class="text-cyan-400 font-mono">30.0</span>
+                        </label>
+                        <input type="range" id="gamma-slider" min="1" max="100" step="1" value="30"
+                            class="w-full h-2 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-cyan-500"
+                        />
+                        <p class="text-xs text-slate-500 mt-1">
+                            Controls the "width" of the RBF bell curve. Higher γ = Narrower influence.
+                        </p>
+                    </div>
+
+                    <div>
+                        <span class="block text-sm font-medium text-slate-300 mb-2">Active Class</span>
+                        <div class="flex space-x-2">
+                            <button id="btn-class-blue" class="flex-1 py-2 rounded-md font-semibold transition-colors bg-blue-500 text-white shadow-lg shadow-blue-500/30">
+                                Blue (+1)
+                            </button>
+                            <button id="btn-class-red" class="flex-1 py-2 rounded-md font-semibold transition-colors bg-slate-700 text-slate-400 hover:bg-slate-600">
+                                Red (-1)
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-700">
+                        <button id="btn-reset" class="w-full py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-700 rounded transition-colors">
+                            Clear All Points
+                        </button>
+                    </div>
+                    
+                    <div class="bg-slate-900/50 p-3 rounded text-xs text-slate-400 font-mono border border-slate-700/50">
+                        K(x, x') = exp(-γ||x - x'||²)
+                    </div>
+                </div>
+
+                <!-- Metrics -->
+                <div class="bg-slate-900 p-5 rounded-lg border border-slate-800 shadow-lg">
+                    <h3 class="text-sm font-semibold text-slate-400 uppercase tracking-wider mb-4">Dataset Metrics</h3>
+                    <div class="space-y-3 text-sm">
+                        <div class="flex justify-between items-center bg-slate-800/50 p-2 rounded">
+                            <span class="text-blue-400 font-medium">Blue Class (+1)</span>
+                            <span id="count-blue" class="font-mono bg-blue-900/30 text-blue-200 px-2 py-0.5 rounded">0</span>
+                        </div>
+                        <div class="flex justify-between items-center bg-slate-800/50 p-2 rounded">
+                            <span class="text-red-400 font-medium">Red Class (-1)</span>
+                            <span id="count-red" class="font-mono bg-red-900/30 text-red-200 px-2 py-0.5 rounded">0</span>
+                        </div>
+                        <div class="mt-4 pt-3 border-t border-slate-800 text-xs text-slate-500">
+                            Each point acts as a center for a Gaussian distribution. The sum of these Gaussians creates the decision surface.
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Center Column: Visualization -->
+            <div class="xl:col-span-6 space-y-8">
+                
+                <!-- 2D Canvas -->
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold text-white flex items-center">
+                       <span class="w-2 h-8 bg-cyan-500 rounded-full mr-3"></span>
+                       Input Space (2D)
+                    </h3>
+                    <div id="canvas-2d-wrapper" class="relative rounded-lg overflow-hidden shadow-2xl border border-slate-700 bg-slate-900 group h-[500px] w-full">
+                        <canvas id="canvas-2d" width="600" height="500" class="w-full h-full cursor-crosshair touch-none"></canvas>
+                        
+                        <div class="absolute top-2 left-2 pointer-events-none flex flex-col gap-1">
+                            <div class="bg-black/60 backdrop-blur text-xs text-white px-2 py-1 rounded">Top-Down View</div>
+                            <div class="bg-black/40 backdrop-blur text-[10px] text-slate-300 px-2 py-1 rounded hidden group-hover:block transition-opacity">
+                                Scroll to Zoom • Drag to Pan • Click to Add
+                            </div>
+                        </div>
+
+                        <div class="absolute bottom-4 right-4 flex flex-col gap-2">
+                            <div class="flex flex-col bg-slate-800 rounded-lg border border-slate-700 shadow-lg overflow-hidden">
+                                <button id="btn-zoom-in" class="p-2 hover:bg-indigo-600 text-white border-b border-slate-700 transition-colors" title="Zoom In">
+                                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
+                                </button>
+                                <button id="btn-zoom-out" class="p-2 hover:bg-indigo-600 text-white transition-colors" title="Zoom Out">
+                                     <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4" /></svg>
+                                </button>
+                            </div>
+                            <button id="btn-zoom-reset" class="bg-slate-800 hover:bg-slate-700 text-xs text-white px-3 py-1.5 rounded shadow border border-slate-700 transition-colors">Reset</button>
+                        </div>
+                    </div>
+                 </div>
+
+                <!-- 3D Canvas -->
+                <div class="space-y-2">
+                    <h3 class="text-lg font-semibold text-white flex items-center">
+                       <span class="w-2 h-8 bg-indigo-500 rounded-full mr-3"></span>
+                       Feature Space (3D Projection)
+                    </h3>
+                    <div class="relative rounded-lg overflow-hidden shadow-2xl border border-slate-700 bg-slate-900 flex flex-col h-[500px] group">
+                        <canvas id="canvas-3d" width="600" height="500" class="w-full h-full object-cover cursor-grab"></canvas>
+                        
+                        <!-- Legend -->
+                        <div class="absolute top-0 left-0 p-3 flex flex-col gap-2 z-10 pointer-events-none">
+                            <div class="bg-black/60 backdrop-blur text-xs text-white px-3 py-2 rounded-md pointer-events-auto border border-slate-700 shadow-xl">
+                                <div class="font-bold mb-2 text-cyan-400 border-b border-slate-600 pb-1">Z-Axis Legend</div>
+                                <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-1 text-[10px] items-center">
+                                    <div class="w-2 h-2 bg-blue-500 rounded-full"></div><div class="text-slate-300">Positive Score (+1)</div>
+                                    <div class="w-2 h-2 bg-red-500 rounded-full"></div><div class="text-slate-300">Negative Score (-1)</div>
+                                    <div class="w-2 h-1 bg-cyan-400/30"></div><div class="text-slate-300">Zero Plane (Boundary)</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lift Control -->
+                        <div class="absolute top-0 right-0 p-3 z-10 pointer-events-none">
+                            <div class="bg-black/70 backdrop-blur p-2 rounded border border-slate-700 pointer-events-auto w-32">
+                                <label class="block text-[10px] uppercase text-slate-400 font-bold mb-1">RBF Lift Effect</label>
+                                <input type="range" id="lift-slider" min="0" max="1" step="0.01" value="0.5" class="w-full h-1 bg-slate-600 rounded-lg appearance-none cursor-pointer accent-indigo-500"/>
+                                <div class="flex justify-between text-[10px] text-slate-500 mt-1"><span>Flat (2D)</span><span>Lifted (3D)</span></div>
+                            </div>
+                        </div>
+
+                        <!-- Coordinate Display -->
+                        <div id="coord-display" class="absolute bottom-2 left-2 z-10 pointer-events-none hidden">
+                            <div class="bg-slate-900/90 backdrop-blur border border-emerald-500/50 shadow-lg rounded-lg p-3 text-sm font-mono">
+                               <div class="text-xs text-emerald-400 uppercase font-bold mb-1 border-b border-emerald-900/50 pb-1">Live Coordinates</div>
+                               <div class="flex flex-col space-y-1">
+                                   <div class="flex justify-between w-32"><span class="text-slate-400">X:</span><span id="val-x" class="text-white">0.000</span></div>
+                                   <div class="flex justify-between w-32"><span class="text-slate-400">Y:</span><span id="val-y" class="text-white">0.000</span></div>
+                                   <div class="flex justify-between w-32 bg-white/5 rounded px-1">
+                                       <span class="text-amber-400 font-bold">Z:</span>
+                                       <span id="val-z" class="font-bold">0.000</span>
+                                   </div>
+                               </div>
+                            </div>
+                        </div>
+                        
+                        <div id="rotate-hint" class="absolute bottom-2 left-2 text-[10px] text-slate-500 pointer-events-none transition-opacity opacity-50 group-hover:opacity-100">
+                            Drag to Rotate • Hover Mesh to Probe
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Right Column: Math Inspector -->
+            <div class="xl:col-span-3">
+                <div class="sticky top-8">
+                    <div class="bg-slate-800 border border-slate-700 rounded-lg flex flex-col h-[600px] shadow-xl overflow-hidden">
+                        
+                        <!-- Math Header -->
+                        <div class="p-4 border-b border-slate-700 bg-slate-900/50">
+                            <div class="flex justify-between items-start">
+                                <div>
+                                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                                        <svg class="w-5 h-5 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                        Math Inspector
+                                    </h2>
+                                    <div class="text-xs text-slate-400 mt-1 flex items-center gap-2">
+                                        Target: <span id="target-badge" class="px-2 py-0.5 rounded text-[10px] uppercase font-bold tracking-wide bg-amber-900 text-amber-300">Latest Point</span>
+                                    </div>
+                                </div>
+                                <button id="btn-unlock" class="hidden text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded border border-slate-600 transition-colors">Unlock</button>
+                            </div>
+                        </div>
+
+                        <!-- Math Content Container -->
+                        <div id="math-content" class="flex flex-col h-full">
+                             <!-- Populated by JS -->
+                             <div class="flex-1 flex items-center justify-center text-slate-500 p-8 text-center">
+                                <div class="space-y-2">
+                                    <svg class="w-12 h-12 mx-auto opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg>
+                                    <p>Add points to see the math engine.</p>
+                                </div>
+                             </div>
+                        </div>
+                        
+                         <!-- Footer -->
+                        <div class="p-2 bg-slate-900 text-[10px] text-slate-500 text-center border-t border-slate-700 flex justify-between px-4">
+                            <span>Click row to lock Target</span>
+                            <span>Hover row to inspect Term</span>
+                         </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script type="module" src="script.js"></script>
   </body>
 </html>
